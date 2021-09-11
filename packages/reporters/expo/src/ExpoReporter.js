@@ -240,8 +240,7 @@ export default (new Reporter({
           return;
         }
 
-        const projectRoot = path.join(options.projectRoot, 'expo');
-        console.log(projectRoot);
+        const projectRoot = options.projectRoot;
 
         const {middleware, attachToServer} = createDevServerMiddleware({
           host: '127.0.0.1',

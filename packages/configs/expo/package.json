@@ -16,6 +16,7 @@
   "main": "index.json",
   "dependencies": {
     "@parcel/config-default": "2.0.0-rc.0",
+    "@parcel/namer-react-native-assets": "2.0.0-rc.0",
     "@parcel/reporter-expo": "2.0.0-rc.0",
     "@parcel/resolver-react-native": "2.0.0-rc.0",
     "@parcel/runtime-react-native": "2.0.0-rc.0"
