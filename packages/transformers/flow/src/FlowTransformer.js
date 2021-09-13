@@ -51,6 +51,7 @@ export default (new Transformer({
       flowRemoveTypes(code, {
         // node_modules/react-native/Libraries/Utilities/DevSettings.js doesn't contain a @flow comment
         all: asset.filePath.includes('node_modules/react-native/'),
+        ignoreUninitializedFields: true,
       }).toString(),
     );
 
