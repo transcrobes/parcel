@@ -11,6 +11,9 @@ import {Reporter} from '@parcel/plugin';
 import {createHTTPServer} from '@parcel/utils';
 // $FlowFixMe[untyped-import]
 import connect from 'connect';
+// $FlowFixMe[untyped-import]
+import {createProxyMiddleware} from 'http-proxy-middleware';
+import SourceMap from '@parcel/source-map';
 
 // $FlowFixMe[untyped-import]
 import {createDevServerMiddleware} from '@react-native-community/cli-server-api';
@@ -218,7 +221,7 @@ function getInitialPageManifest({
       projectRoot,
     },
     mainModuleName: pkg.main,
-    bundleUrl: `http://${ip}:1234/entry.js`,
+    bundleUrl: `http://${ip}:19001/entry.js`,
     // bundleUrl: `http://${host}/entry.js`,
     // bundleUrl: `http://${host}/index.${platform}.js?platform=${platform}&dev=${!minify}&hot=false&minify=${minify}`,
     logUrl: `http://${host}/logs`,
@@ -266,23 +269,26 @@ export default (new Reporter({
             }),
           ),
         );
-        middleware.use((req: IncomingMessage, res: ServerResponse, next) => {
-          if (req.url === '/logs') {
-            // const buffers = [];
-            // for await (const chunk of req) {
-            //   buffers.push(Buffer.from(chunk));
-            // }
+        middleware.use(
+          async (req: IncomingMessage, res: ServerResponse, next) => {
+            if (req.url === '/logs') {
+              const buffers = [];
+              for await (const chunk of req) {
+                buffers.push(Buffer.from(chunk));
+              }
 
-            // const data = Buffer.concat(buffers).toString();
-            // console.log(data); // 'Buy the milk'
-            res.statusCode = 200;
-            return res.end();
-          }
-          logger.verbose({
-            message: `Request unhandled: ${req.headers.host}${req.url}`,
-          });
-          next();
-        });
+              const data = Buffer.concat(buffers).toString();
+              console.log(data);
+              res.statusCode = 200;
+              return res.end();
+            } else {
+              logger.verbose({
+                message: `Request unhandled: ${req.headers.host}${req.url}`,
+              });
+              next();
+            }
+          },
+        );
         const server = http
           .createServer((req: IncomingMessage, res: ServerResponse, next) => {
             logger.verbose({
@@ -315,18 +321,80 @@ export default (new Reporter({
 
         // const inspectorProxy = new InspectorProxy(options.projectRoot);
 
-        // server = await createHTTPServer({
-        //   cacheDir: options.cacheDir,
-        //   https: serveOptions.https,
-        //   inputFS: options.inputFS,
-        //   listener: app,
-        //   outputFS: options.outputFS,
-        //   host: serveOptions.host,
-        // });
+        let devServerProxyMiddleware = createProxyMiddleware({
+          target: `http://${nullthrows(serveOptions.host)}:${
+            serveOptions.port
+          }`,
+          changeOrigin: true,
+          logLevel: 'warn',
+        });
+        let devServerProxy = await createHTTPServer({
+          cacheDir: options.cacheDir,
+          https: serveOptions.https,
+          inputFS: options.inputFS,
+          // $FlowFixMe
+          listener: (req: IncomingMessage, res: ServerResponse) => {
+            if (req.url === '/symbolicate') {
+              // const buffers = [];
+              // for await (const chunk of req) {
+              //   buffers.push(Buffer.from(chunk));
+              // }
 
-        // await new Promise(res =>
-        //   server.server.listen(19000, serveOptions.host, res),
-        // );
+              // const data: {|
+              //   stack: Array<{|
+              //     file: string,
+              //     lineNumber: number,
+              //     column: number,
+              //   |}>,
+              // |} = JSON.parse(Buffer.concat(buffers).toString());
+
+              // let mapData = JSON.parse(
+              //   await options.outputFS.readFile('./dist/entry.js.map', 'utf8'),
+              // );
+
+              // let map = new SourceMap(__dirname);
+              // map.addVLQMap(mapData);
+
+              res.statusCode = 200;
+              res
+                .end
+                // JSON.stringify({
+                //   codeFrame: {
+                //     content: `...`,
+                //     fileName: '...',
+                //     location: {
+                //       column: 0,
+                //       row: 1,
+                //     },
+                //   },
+                //   stack: data.stack.map(({column, lineNumber}) => {
+                //     let result = map.findClosestMapping(lineNumber, column);
+                //     return
+                //   }),
+                //   // [
+                //   //   {
+                //   //     collapse: false,
+                //   //     column: 0,
+                //   //     customPropShouldBeLeftUnchanged: 'foo',
+                //   //     file: '/root/mybundle.js',
+                //   //     lineNumber: 1,
+                //   //     methodName: 'clientSideMethodName',
+                //   //   },
+                //   // ],
+                // }),
+                ();
+            } else {
+              devServerProxyMiddleware(req, res);
+            }
+          },
+          outputFS: options.outputFS,
+          host: serveOptions.host,
+        });
+
+        await new Promise(res =>
+          devServerProxy.server.listen(19001, serveOptions.host, res),
+        );
+
         // attachToServer(server.server);
         // inspectorProxy.addWebSocketListener(server.server);
         // app.use((req, res, next) =>
