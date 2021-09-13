@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@expo/dev-server": "^0.1.82",
+    "@parcel/codeframe": "2.0.0-rc.0",
     "@parcel/plugin": "2.0.0-rc.0",
     "@parcel/source-map": "2.0.0-rc.7",
     "@react-native-community/cli-server-api": "^5.0.1",

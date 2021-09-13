@@ -1,6 +1,6 @@
 // @flow strict-local
-import type {FilePath} from '@parcel/types';
-import type {FileSystem} from '@parcel/fs';
+// import type {FilePath} from '@parcel/types';
+// import type {FileSystem} from '@parcel/fs';
 import type {IncomingMessage, ServerResponse} from 'http';
 
 import nullthrows from 'nullthrows';
@@ -10,24 +10,26 @@ import http from 'http';
 import {Reporter} from '@parcel/plugin';
 import {createHTTPServer} from '@parcel/utils';
 // $FlowFixMe[untyped-import]
-import connect from 'connect';
+// import connect from 'connect';
 // $FlowFixMe[untyped-import]
 import {createProxyMiddleware} from 'http-proxy-middleware';
 import SourceMap from '@parcel/source-map';
 
+import formatCodeFrame from '@parcel/codeframe';
+
 // $FlowFixMe[untyped-import]
 import {createDevServerMiddleware} from '@react-native-community/cli-server-api';
 
-// $FlowFixMe[untyped-import]
-const {InspectorProxy} = require('metro-inspector-proxy');
-const {
-  default: clientLogsMiddleware,
-  // $FlowFixMe[untyped-import]
-} = require('@expo/dev-server/build/middleware/clientLogsMiddleware');
-const {
-  default: createJsInspectorMiddleware,
-  // $FlowFixMe[untyped-import]
-} = require('@expo/dev-server/build/middleware/createJsInspectorMiddleware');
+// // $FlowFixMe[untyped-import]
+// const {InspectorProxy} = require('metro-inspector-proxy');
+// const {
+//   default: clientLogsMiddleware,
+//   // $FlowFixMe[untyped-import]
+// } = require('@expo/dev-server/build/middleware/clientLogsMiddleware');
+// const {
+//   default: createJsInspectorMiddleware,
+//   // $FlowFixMe[untyped-import]
+// } = require('@expo/dev-server/build/middleware/createJsInspectorMiddleware');
 
 // function generateManifest(host: string, appJson: {[string]: mixed}) {
 //   // $FlowFixMe
@@ -234,6 +236,19 @@ function getInitialPageManifest({
   return initialPageManifest;
 }
 
+const INTERNAL_CALLSITES_REGEX = new RegExp(
+  [
+    '/Libraries/Renderer/implementations/.+\\.js$',
+    '/Libraries/BatchedBridge/MessageQueue\\.js$',
+    '/Libraries/YellowBox/.+\\.js$',
+    '/Libraries/LogBox/.+\\.js$',
+    '/Libraries/Core/Timers/.+\\.js$',
+    '/node_modules/react-devtools-core/.+\\.js$',
+    '/node_modules/react-refresh/.+\\.js$',
+    '/node_modules/scheduler/.+\\.js$',
+  ].join('|'),
+);
+
 export default (new Reporter({
   async report({event, options, logger}) {
     switch (event.type) {
@@ -297,7 +312,7 @@ export default (new Reporter({
             middleware(req, res, next);
           })
           .listen(19000);
-        const {messageSocket, eventsSocket} = attachToServer(server);
+        /* const {messageSocket, eventsSocket} =  */ attachToServer(server);
 
         // var app = connect();
 
@@ -333,56 +348,106 @@ export default (new Reporter({
           https: serveOptions.https,
           inputFS: options.inputFS,
           // $FlowFixMe
-          listener: (req: IncomingMessage, res: ServerResponse) => {
+          listener: async (req: IncomingMessage, res: ServerResponse) => {
             if (req.url === '/symbolicate') {
-              // const buffers = [];
-              // for await (const chunk of req) {
-              //   buffers.push(Buffer.from(chunk));
-              // }
+              logger.verbose({
+                message: `Request: ${req.headers.host}${req.url}`,
+              });
 
-              // const data: {|
-              //   stack: Array<{|
-              //     file: string,
-              //     lineNumber: number,
-              //     column: number,
-              //   |}>,
-              // |} = JSON.parse(Buffer.concat(buffers).toString());
+              try {
+                const buffers = [];
+                for await (const chunk of req) {
+                  buffers.push(Buffer.from(chunk));
+                }
 
-              // let mapData = JSON.parse(
-              //   await options.outputFS.readFile('./dist/entry.js.map', 'utf8'),
-              // );
+                const data: {|
+                  stack: Array<{|
+                    file: string,
+                    lineNumber: ?number,
+                    column: ?number,
+                    methodName: string,
+                  |}>,
+                |} = JSON.parse(Buffer.concat(buffers).toString());
 
-              // let map = new SourceMap(__dirname);
-              // map.addVLQMap(mapData);
+                let mapData = JSON.parse(
+                  await options.outputFS.readFile(
+                    './dist/entry.js.map',
+                    'utf8',
+                  ),
+                );
 
-              res.statusCode = 200;
-              res
-                .end
-                // JSON.stringify({
-                //   codeFrame: {
-                //     content: `...`,
-                //     fileName: '...',
-                //     location: {
-                //       column: 0,
-                //       row: 1,
-                //     },
-                //   },
-                //   stack: data.stack.map(({column, lineNumber}) => {
-                //     let result = map.findClosestMapping(lineNumber, column);
-                //     return
-                //   }),
-                //   // [
-                //   //   {
-                //   //     collapse: false,
-                //   //     column: 0,
-                //   //     customPropShouldBeLeftUnchanged: 'foo',
-                //   //     file: '/root/mybundle.js',
-                //   //     lineNumber: 1,
-                //   //     methodName: 'clientSideMethodName',
-                //   //   },
-                //   // ],
-                // }),
-                ();
+                let map = new SourceMap(projectRoot);
+                map.addVLQMap(mapData);
+
+                let translatedStack = data.stack.map(
+                  ({column, lineNumber, methodName}) => {
+                    let result =
+                      lineNumber != null && column != null
+                        ? map.findClosestMapping(lineNumber, column)
+                        : null;
+
+                    return {
+                      methodName,
+                      column: result
+                        ? nullthrows(result.original).column
+                        : null,
+                      lineNumber: result
+                        ? nullthrows(result.original).line
+                        : null,
+                      file:
+                        result?.source != null
+                          ? path.resolve(projectRoot, result.source)
+                          : '',
+                      collapse:
+                        result?.source != null &&
+                        INTERNAL_CALLSITES_REGEX.test(result.source),
+                    };
+                  },
+                );
+                let codeFrame = translatedStack.find(f => !f.collapse);
+
+                res.statusCode = 200;
+                res.end(
+                  JSON.stringify({
+                    codeFrame:
+                      codeFrame != null &&
+                      codeFrame.lineNumber != null &&
+                      codeFrame.column != null
+                        ? {
+                            content: formatCodeFrame(
+                              map.getSourceContent(codeFrame.file) ??
+                                (await options.inputFS.readFile(
+                                  codeFrame.file,
+                                  'utf8',
+                                )),
+                              [
+                                {
+                                  start: {
+                                    line: codeFrame.lineNumber,
+                                    column: codeFrame.column,
+                                  },
+                                  end: {
+                                    line: codeFrame.lineNumber,
+                                    column: codeFrame.column,
+                                  },
+                                },
+                              ],
+                            ),
+                            fileName: codeFrame.file,
+                            location: {
+                              column: codeFrame.column,
+                              row: codeFrame.lineNumber,
+                            },
+                          }
+                        : null,
+                    stack: translatedStack,
+                  }),
+                );
+              } catch (e) {
+                console.log(e);
+                res.statusCode = 500;
+                res.end();
+              }
             } else {
               devServerProxyMiddleware(req, res);
             }
