@@ -8,7 +8,7 @@ import nullthrows from 'nullthrows';
 import {Resolver} from '@parcel/plugin';
 import NodeResolver from '@parcel/node-resolver-core';
 import {glob} from '@parcel/utils';
-import {Hash} from '@parcel/hash';
+import {hashString, Hash} from '@parcel/hash';
 
 const NODE_EXTENSIONS = ['ts', 'tsx', 'js', 'jsx', 'json'];
 function getReactNativeInfixes() {
@@ -28,7 +28,7 @@ function* crossProduct(a, b) {
   }
 }
 
-const SCALE_REGEX = /^(?:.+?)(?:@([\d.]+)x)?\.\w+$/;
+const SCALE_REGEX = /^(.+?)(@([\d.]+)x)?\.\w+$/;
 
 // https://github.com/facebook/metro/blob/af23a1b27bcaaff2e43cb795744b003e145e78dd/packages/metro/src/Assets.js#L187-L228
 // https://github.com/facebook/metro/blob/af23a1b27bcaaff2e43cb795744b003e145e78dd/packages/metro/src/__tests__/Assets-test.js#L202
@@ -71,7 +71,9 @@ export default (new Resolver({
             onlyFiles: true,
           })
         ).map(file => {
-          let [, scale] = nullthrows(path.basename(file).match(SCALE_REGEX));
+          let [, , , scale] = nullthrows(
+            path.basename(file).match(SCALE_REGEX),
+          );
           return {file: path.basename(file), scale: Number(scale)};
         }),
       );
@@ -84,10 +86,8 @@ export default (new Resolver({
         );
       }
 
-      // TODO proper hash
-
       return {
-        filePath: basename + '.js',
+        filePath: `${basename}.js`,
         code: `
 ${files
   .map(({file}) => `require(${JSON.stringify('rn-asset:./' + file)});`)
@@ -100,7 +100,11 @@ module.exports = require("react-native/Libraries/Image/AssetRegistry").registerA
   height: ${258},
   scales: ${JSON.stringify(files.map(({scale}) => scale))},
   hash: ${JSON.stringify(hash.finish())},
-  name: ${JSON.stringify(path.basename(basename))},
+  name: ${JSON.stringify(
+    `${path.basename(basename)}.${hashString(
+      path.posix.relative(options.projectRoot, filePath),
+    )}`,
+  )},
   type: "png",
 });
 `,
