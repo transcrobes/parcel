@@ -2,6 +2,7 @@
 // import type {FilePath} from '@parcel/types';
 // import type {FileSystem} from '@parcel/fs';
 import type {IncomingMessage, ServerResponse} from 'http';
+import type {LogLevel} from '@parcel/types';
 
 import nullthrows from 'nullthrows';
 import path from 'path';
@@ -14,8 +15,8 @@ import {createHTTPServer} from '@parcel/utils';
 // $FlowFixMe[untyped-import]
 import {createProxyMiddleware} from 'http-proxy-middleware';
 import SourceMap from '@parcel/source-map';
-
 import formatCodeFrame from '@parcel/codeframe';
+import {inspect} from 'util';
 
 // $FlowFixMe[untyped-import]
 import {createDevServerMiddleware} from '@react-native-community/cli-server-api';
@@ -292,8 +293,33 @@ export default (new Reporter({
                 buffers.push(Buffer.from(chunk));
               }
 
-              const data = Buffer.concat(buffers).toString();
-              console.log(data);
+              const logs = JSON.parse(Buffer.concat(buffers).toString());
+              const deviceName = req.headers['device-name'];
+              const expoPlatform = req.headers['expo-platform'];
+
+              for (const log of logs) {
+                let body = Array.isArray(log.body) ? log.body : [log.body];
+
+                if (
+                  body.length === 1 &&
+                  (/^Running application "main" with appParams:/.test(
+                    body[0],
+                  ) ||
+                    /^Running "main" with \{/.test(body[0]))
+                ) {
+                  body = [
+                    `${expoPlatform ?? ''}Running app on ${deviceName ?? ''}`,
+                  ];
+                }
+                // let {level} = log;
+
+                logger.info({
+                  message: `${deviceName}: ${body
+                    .map(b => inspect(b))
+                    .join(' ')}`,
+                });
+              }
+
               res.statusCode = 200;
               return res.end();
             } else {
