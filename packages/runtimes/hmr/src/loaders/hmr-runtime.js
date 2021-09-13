@@ -79,7 +79,7 @@ if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== 'undefined') {
   var hostname = getHostname();
   var port = getPort();
   var protocol =
-    // TODO fallback fo React Native
+    // TODO fallback for React Native
     HMR_SECURE /* ||
     (location.protocol == 'https:' &&
       !/localhost|127.0.0.1|0.0.0.0/.test(hostname)) */
@@ -88,7 +88,8 @@ if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== 'undefined') {
   var ws = new WebSocket(
     protocol + '://' + hostname + (port ? ':' + port : '') + '/',
   );
-  let ws_onmessage = function(event /*: {data: string, ...} */) {
+  // $FlowFixMe
+  ws.onmessage = function(event /*: {data: string, ...} */) {
     checkedAssets = ({} /*: {|[string]: boolean|} */);
     acceptedAssets = ({} /*: {|[string]: boolean|} */);
     assetsToAccept = [];
@@ -152,15 +153,14 @@ if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== 'undefined') {
       // document.body.appendChild(overlay);
     }
   };
-  // $FlowFixMe
-  ws.addEventListener('message', ws_onmessage);
-  let ws_onclose = function(e) {
+  ws.onerror = function(e) {
+    console.error(e.message);
+  };
+  ws.onclose = function(e) {
     if (process.env.PARCEL_BUILD_ENV !== 'test') {
       console.warn('[parcel] 🚨 Connection to the HMR server was lost');
     }
   };
-  // $FlowFixMe
-  ws.addEventListener('close', ws_onclose);
 }
 
 // function removeErrorOverlay() {
