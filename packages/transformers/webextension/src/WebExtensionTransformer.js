@@ -15,11 +15,14 @@ import WebExtensionSchema from './schema';
 
 const DEP_LOCS = [
   ['icons'],
+  ['action', 'default_icon'],
+  ['action', 'default_popup'],
   ['browser_action', 'default_icon'],
   ['browser_action', 'default_popup'],
   ['page_action', 'default_icon'],
   ['page_action', 'default_popup'],
-  ['background', 'scripts'],
+  // ['background', 'scripts'],
+  ['background', 'service_worker'],
   ['chrome_url_overrides'],
   ['devtools_page'],
   ['options_ui', 'page'],
@@ -60,8 +63,7 @@ async function collectDependencies(
                 codeHighlights: [
                   {
                     ...getJSONSourceLocation(ptrs['/default_locale'], err),
-                    message: md`Localization directory${
-                      err == 'value' ? ' for ' + program.default_locale : ''
+                    message: md`Localization directory${err == 'value' ? ' for ' + program.default_locale : ''
                     } does not exist: ${path.relative(
                       path.dirname(filePath),
                       path.join(locales, program.default_locale),
@@ -173,12 +175,13 @@ async function collectDependencies(
   if (program.web_accessible_resources) {
     let war = [];
     for (let i = 0; i < program.web_accessible_resources.length; ++i) {
+      for (let j = 0; j < program.web_accessible_resources[i].resources.length; j++) {
       // TODO: this doesn't support Parcel resolution
       const globFiles = (
         await glob(
           path.join(
             path.dirname(filePath),
-            program.web_accessible_resources[i],
+              program.web_accessible_resources[i].resources[j],
           ),
           fs,
           {},
@@ -194,7 +197,8 @@ async function collectDependencies(
       );
       war = war.concat(globFiles);
     }
-    program.web_accessible_resources = war;
+    }
+    // program.web_accessible_resources = war;
   }
   for (const loc of DEP_LOCS) {
     const location = '/' + loc.join('/');
@@ -283,12 +287,13 @@ export default (new Transformer({
       asset,
       data,
       parsed.pointers,
-      Boolean(options.hmrOptions),
+      // Boolean(options.hmrOptions),
+      Boolean(false),
     );
-    if (options.hmrOptions) {
-      // To enable HMR, we must override the CSP to allow 'unsafe-eval'
-      data.content_security_policy = cspPatchHMR(data.content_security_policy);
-    }
+    // if (options.hmrOptions) {
+    //   // To enable HMR, we must override the CSP to allow 'unsafe-eval'
+    //   data.content_security_policy = cspPatchHMR(data.content_security_policy);
+    // }
     asset.meta.handled = true;
     asset.setCode(JSON.stringify(data, null, 2));
     return [asset];

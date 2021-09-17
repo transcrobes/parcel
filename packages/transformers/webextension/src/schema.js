@@ -43,7 +43,7 @@ export default ({
   properties: {
     manifest_version: {
       type: 'number',
-      enum: [2],
+      enum: [2, 3],
     },
     name: {type: 'string'},
     version: {
@@ -53,6 +53,12 @@ export default ({
     default_locale: {type: 'string'},
     description: {type: 'string'},
     icons,
+    action: {
+      type: 'object',
+      properties: {
+        ...actionProps,
+      }
+    },
     browser_action: {
       type: 'object',
       properties: {
@@ -90,9 +96,10 @@ export default ({
     background: {
       type: 'object',
       properties: {
-        scripts: arrStr,
-        page: {type: 'string'},
-        persistent: {type: 'boolean'},
+        // scripts: arrStr,
+        service_worker: { type: 'string' },
+        // persistent: { type: 'boolean' },
+        type: { type: 'string' }
       },
     },
     chrome_settings_overrides: {
@@ -387,6 +394,6 @@ export default ({
       },
     },
     version_name: {type: 'string'},
-    web_accessible_resources: arrStr,
+    web_accessible_resources: { resources: arrStr, matches: arrStr, extention_ids: arrStr },
   },
 }: SchemaEntity);
